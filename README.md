@@ -149,6 +149,13 @@ app/src/main/java/com/bdaniel/imagecast/
 receiver/index.html      The custom web receiver
 ```
 
+## Publishing
+
+See [RELEASE.md](RELEASE.md) for what stands between this build and a public
+release. Two items block everything else: the target API level is below what
+Google Play now accepts, and the Cast receiver is still unpublished, so it only
+launches on devices registered in the Cast Developer Console.
+
 ## Notes and limits
 
 - The picture sent to the TV is capped at 2560 px on its long edge
