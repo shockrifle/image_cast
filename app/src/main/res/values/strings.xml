@@ -2,9 +2,13 @@
     <string name="app_name">Image Cast</string>
 
     <!--
-        Receiver application ID from the Google Cast Developer Console.
-        Replace this with the ID of YOUR registered Custom Web Receiver that
-        hosts receiver/index.html (see README.md).
+        Receiver application ID from the Google Cast Developer Console, for the
+        Custom Receiver serving receiver/index.html from
+        https://shockrifle.github.io/image_cast/receiver/index.html
+
+        This is an identifier rather than a credential: it is broadcast during
+        cast discovery and is readable in any sender APK, so it lives in source.
+        Fork the project? Register your own receiver and replace it here.
     -->
-    <string name="cast_receiver_app_id" translatable="false">REPLACE_WITH_YOUR_APP_ID</string>
+    <string name="cast_receiver_app_id" translatable="false">970FC601</string>
 </resources>

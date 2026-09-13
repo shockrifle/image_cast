@@ -84,6 +84,18 @@ Edit `app/src/main/res/values/strings.xml`:
 <string name="cast_receiver_app_id">YOUR_APP_ID_HERE</string>
 ```
 
+This repository is already wired to a registered receiver:
+
+| | |
+| --- | --- |
+| Application ID | `970FC601` |
+| Receiver URL | https://shockrifle.github.io/image_cast/receiver/index.html |
+| Status | Unpublished (launches only on authorised devices) |
+
+The app ID is an identifier, not a credential — it is broadcast during cast
+discovery and readable in any sender APK, so it is committed deliberately.
+Forks should register their own receiver and replace it.
+
 ### 4. Build
 
 A portable toolchain is already set up in `C:\workspace\android-toolchain`
