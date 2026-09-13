@@ -1,0 +1,13 @@
+# Normalise to LF in the repository; check out per-platform where it matters.
+* text=auto eol=lf
+
+# Windows-only scripts stay CRLF so Notepad/PowerShell behave.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# The Gradle launcher must keep LF or it will not run on Linux/macOS.
+gradlew text eol=lf
+
+*.jar binary
+*.png binary
+*.apk binary

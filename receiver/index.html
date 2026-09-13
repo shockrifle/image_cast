@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Cast Receiver</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+      color: #b0bec5;
+    }
+
+    #stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /*
+      The image is sized to its "contained" fit for THIS screen, then the
+      sender's zoom/pan is applied on top. Because the sender expresses the
+      transform relative to the image (not to phone pixels), the framing is
+      reproduced here at the panel's own aspect ratio and resolution -- the
+      picture is never cropped to the phone's viewport.
+    */
+    #photo {
+      transform-origin: center center;
+      will-change: transform;
+      image-rendering: auto;
+      /* No transition: gestures arrive as a continuous stream. */
+    }
+
+    #photo.hidden { display: none; }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      text-align: center;
+      padding: 0 6vw;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    #overlay.hidden { display: none; }
+
+    #title {
+      font-size: 2.2vw;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #4fc3f7;
+    }
+
+    #message { font-size: 1.6vw; }
+
+    #bar {
+      width: 34vw;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.16);
+      overflow: hidden;
+    }
+
+    #bar.hidden { visibility: hidden; }
+
+    #fill {
+      height: 100%;
+      width: 0;
+      background: #4fc3f7;
+      transition: width 120ms linear;
+    }
+  </style>
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+</head>
+<body>
+  <div id="stage">
+    <img id="photo" class="hidden" alt="">
+  </div>
+
+  <div id="overlay">
+    <div id="title">Image Cast</div>
+    <div id="message">Waiting for a picture…</div>
+    <div id="bar" class="hidden"><div id="fill"></div></div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  var NAMESPACE = 'urn:x-cast:com.bdaniel.imagecast';
+
+  var photo = document.getElementById('photo');
+  var overlay = document.getElementById('overlay');
+  var message = document.getElementById('message');
+  var bar = document.getElementById('bar');
+  var fill = document.getElementById('fill');
+
+  // --- state ---------------------------------------------------------------
+
+  var transfer = null;            // in-flight { gen, mime, chunks, parts, received }
+  var transform = { s: 1, x: 0, y: 0 };
+  var naturalWidth = 0;
+  var naturalHeight = 0;
+
+  function showOverlay(text, progress) {
+    message.textContent = text;
+    overlay.classList.remove('hidden');
+    if (typeof progress === 'number') {
+      bar.classList.remove('hidden');
+      fill.style.width = Math.round(progress * 100) + '%';
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
+
+  function hideOverlay() {
+    overlay.classList.add('hidden');
+  }
+
+  // --- rendering -----------------------------------------------------------
+
+  /**
+   * Lays the image out "contained" in this display, then applies the sender's
+   * scale and offsets. Offsets arrive as multiples of the contained width and
+   * height, so they mean the same framing on any screen size.
+   */
+  function render() {
+    if (!naturalWidth || !naturalHeight) return;
+
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var fit = Math.min(vw / naturalWidth, vh / naturalHeight);
+    var baseW = naturalWidth * fit;
+    var baseH = naturalHeight * fit;
+
+    photo.style.width = baseW + 'px';
+    photo.style.height = baseH + 'px';
+
+    var tx = transform.x * baseW;
+    var ty = transform.y * baseH;
+    // Right-to-left: scale about the centre first, then translate in
+    // unscaled pixels -- identical to the phone's graphicsLayer.
+    photo.style.transform =
+      'translate(' + tx + 'px, ' + ty + 'px) scale(' + transform.s + ')';
+  }
+
+  window.addEventListener('resize', render);
+
+  // --- protocol ------------------------------------------------------------
+
+  function onBegin(msg) {
+    transfer = {
+      gen: msg.gen,
+      mime: msg.mime || 'image/jpeg',
+      chunks: msg.chunks,
+      parts: new Array(msg.chunks),
+      received: 0
+    };
+    showOverlay('Receiving picture…', 0);
+  }
+
+  function onChunk(msg) {
+    if (!transfer || msg.gen !== transfer.gen) return;
+    if (transfer.parts[msg.i] === undefined) transfer.received++;
+    transfer.parts[msg.i] = msg.d;
+    showOverlay('Receiving picture…', transfer.received / transfer.chunks);
+  }
+
+  function onEnd(msg) {
+    if (!transfer || msg.gen !== transfer.gen) return;
+
+    for (var i = 0; i < transfer.chunks; i++) {
+      if (transfer.parts[i] === undefined) {
+        showOverlay('Transfer incomplete — please send the picture again.');
+        transfer = null;
+        return;
+      }
+    }
+
+    // Every chunk but the last is an exact multiple of 3 bytes, so the base64
+    // pieces concatenate cleanly into one payload.
+    var dataUrl = 'data:' + transfer.mime + ';base64,' + transfer.parts.join('');
+    transfer = null;
+
+    photo.onload = function () {
+      naturalWidth = photo.naturalWidth;
+      naturalHeight = photo.naturalHeight;
+      photo.classList.remove('hidden');
+      render();
+      hideOverlay();
+      post({ t: 'status', state: 'ready', w: naturalWidth, h: naturalHeight });
+    };
+    photo.onerror = function () {
+      showOverlay('Could not decode the picture.');
+      post({ t: 'status', state: 'error' });
+    };
+    photo.src = dataUrl;
+  }
+
+  function onTransform(msg) {
+    transform = {
+      s: typeof msg.s === 'number' ? msg.s : 1,
+      x: typeof msg.x === 'number' ? msg.x : 0,
+      y: typeof msg.y === 'number' ? msg.y : 0
+    };
+    render();
+  }
+
+  function onClear() {
+    transfer = null;
+    photo.classList.add('hidden');
+    photo.removeAttribute('src');
+    naturalWidth = naturalHeight = 0;
+    showOverlay('Waiting for a picture…');
+  }
+
+  // --- cast plumbing -------------------------------------------------------
+
+  var context = cast.framework.CastReceiverContext.getInstance();
+
+  function post(payload) {
+    try {
+      context.sendCustomMessage(NAMESPACE, undefined, payload);
+    } catch (e) {
+      // No sender attached yet; nothing to do.
+    }
+  }
+
+  context.addCustomMessageListener(NAMESPACE, function (event) {
+    var msg = event.data;
+    if (typeof msg === 'string') {
+      try { msg = JSON.parse(msg); } catch (e) { return; }
+    }
+    if (!msg || !msg.t) return;
+
+    switch (msg.t) {
+      case 'begin': onBegin(msg); break;
+      case 'chunk': onChunk(msg); break;
+      case 'end': onEnd(msg); break;
+      case 'tf': onTransform(msg); break;
+      case 'clear': onClear(); break;
+    }
+  });
+
+  context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function () {
+    if (context.getSenders().length === 0) {
+      window.close();
+    }
+  });
+
+  var options = new cast.framework.CastReceiverOptions();
+  // This receiver shows stills, so the usual "no media playing" idle shutdown
+  // must be switched off or the TV would drop the session after a few minutes.
+  options.disableIdleTimeout = true;
+  options.customNamespaces = {};
+  options.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
+
+  context.start(options);
+})();
+</script>
+</body>
+</html>

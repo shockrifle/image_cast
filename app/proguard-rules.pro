@@ -1,0 +1,1 @@
+-keep class com.bdaniel.imagecast.CastOptionsProvider { *; }

@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Image Cast</string>
+
+    <!--
+        Receiver application ID from the Google Cast Developer Console.
+        Replace this with the ID of YOUR registered Custom Web Receiver that
+        hosts receiver/index.html (see README.md).
+    -->
+    <string name="cast_receiver_app_id" translatable="false">REPLACE_WITH_YOUR_APP_ID</string>
+</resources>
